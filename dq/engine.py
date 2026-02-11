@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 from sqlmodel import select
 from .db import session
-from .models import DQRun, DQException, Observation, DataSource, RiskFactor
+from .models import DQRun, DQException, RiskFactor
 from .rules.spikes import HampelRule
 from .rules.gaps import MissingBdaysRule, StaleRule
 from .rules.reconcile import ReconcileRule
@@ -15,6 +15,7 @@ STALE = StaleRule()
 RECON = ReconcileRule()
 
 def load_series(rf_id: str) -> dict[str, pd.Series]:
+    from .models import Observation, DataSource
     with session() as s:
         rows = s.exec(
             select(Observation.obs_date, Observation.value, DataSource.name)
@@ -34,15 +35,22 @@ def expected_bdays(start: date, end: date) -> set[date]:
     return set(pd.bdate_range(start, end).date)
 
 def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int = 400) -> int:
+    # Create run + capture run_id immediately (no detached ORM objects)
     with session() as s:
         rf = s.get(RiskFactor, risk_factor_id)
         if not rf:
             raise ValueError(f"Unknown risk factor {risk_factor_id}. Did you ingest?")
-        run = DQRun(asset_class=asset_class, risk_factor_id=risk_factor_id, asof=asof,
-                    parameters={"lookback_days": lookback_days})
+
+        run = DQRun(
+            asset_class=asset_class,
+            risk_factor_id=risk_factor_id,
+            asof=asof,
+            parameters={"lookback_days": lookback_days},
+        )
         s.add(run)
         s.commit()
-        s.refresh(run)
+        s.refresh(run)  # ensure ID is populated
+        run_id = int(run.id)
 
     series_by_src = load_series(risk_factor_id)
     if not series_by_src:
@@ -52,8 +60,9 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
     expected = expected_bdays(start, asof)
 
     primary_src = sorted(series_by_src.keys())[0]
-    primary = series_by_src[primary_src].loc[(series_by_src[primary_src].index >= start) &
-                                            (series_by_src[primary_src].index <= asof)]
+    primary = series_by_src[primary_src].loc[
+        (series_by_src[primary_src].index >= start) & (series_by_src[primary_src].index <= asof)
+    ]
 
     issues = []
     issues += SPIKE.run(primary)
@@ -62,11 +71,11 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
 
     if len(series_by_src) >= 2:
         other_src = sorted(series_by_src.keys())[1]
-        other = series_by_src[other_src].loc[(series_by_src[other_src].index >= start) &
-                                            (series_by_src[other_src].index <= asof)]
+        other = series_by_src[other_src].loc[
+            (series_by_src[other_src].index >= start) & (series_by_src[other_src].index <= asof)
+        ]
         issues += RECON.run(primary, other_series=other)
 
-    # relations demos
     if asset_class == "rates" and risk_factor_id == "US10Y":
         peers = load_series("US2Y")
         if peers:
@@ -85,21 +94,24 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
                 ac=eurgbp[sorted(eurgbp.keys())[0]],
             )
 
+    # Persist exceptions + mark run finished using run_id (not run object)
     with session() as s:
         for iss in issues:
-            s.add(DQException(
-                dq_run_id=run.id,
-                risk_factor_id=risk_factor_id,
-                rule=iss.rule,
-                obs_date=iss.obs_date,
-                severity=int(iss.severity),
-                status="open",
-                suggested_action=iss.suggested_action,
-                details=iss.details,
-            ))
-        run = s.get(DQRun, run.id)
-        run.finished_at = pd.Timestamp.utcnow().to_pydatetime()
-        s.add(run)
+            s.add(
+                DQException(
+                    dq_run_id=run_id,
+                    risk_factor_id=risk_factor_id,
+                    rule=iss.rule,
+                    obs_date=iss.obs_date,
+                    severity=int(iss.severity),
+                    status="open",
+                    suggested_action=iss.suggested_action,
+                    details=iss.details,
+                )
+            )
+        run2 = s.get(DQRun, run_id)
+        run2.finished_at = pd.Timestamp.utcnow().to_pydatetime()
+        s.add(run2)
         s.commit()
 
-    return run.id
+    return run_id
