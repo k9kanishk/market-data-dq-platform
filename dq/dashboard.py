@@ -170,3 +170,19 @@ def main():
                 s.commit()
             st.success("Recorded.")
             st.rerun()
+
+        st.subheader("Action history")
+
+        with session() as s:
+            acts = s.exec(
+                select(ExceptionAction)
+                .where(ExceptionAction.exception_id == int(ex_row["id"]))
+                .order_by(ExceptionAction.id.desc())
+            ).all()
+
+        if not acts:
+            st.caption("No actions yet.")
+        else:
+            adf = pd.DataFrame([a.model_dump() for a in acts])
+            cols = [c for c in ["id", "created_at", "ts", "action", "comment", "actor"] if c in adf.columns]
+            st.dataframe(adf[cols], width="stretch", hide_index=True)

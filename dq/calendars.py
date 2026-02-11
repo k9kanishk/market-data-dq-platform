@@ -34,6 +34,23 @@ class NYSEHolidayCalendar(AbstractHolidayCalendar):
     ]
 
 
+class USTreasuryHolidayCalendar(AbstractHolidayCalendar):
+    # Practical “good-enough” SIFMA-like holiday set for a VaR DQ demo.
+    # (Avoids Columbus/Veterans to not under-flag; still kills the obvious false positives.)
+    rules = [
+        Holiday("NewYearsDay", month=1, day=1, observance=nearest_workday),
+        USMartinLutherKingJr,
+        USPresidentsDay,
+        GoodFriday,
+        USMemorialDay,
+        Holiday("Juneteenth", month=6, day=19, observance=nearest_workday),
+        Holiday("IndependenceDay", month=7, day=4, observance=nearest_workday),
+        USLaborDay,
+        USThanksgivingDay,
+        Holiday("ChristmasDay", month=12, day=25, observance=nearest_workday),
+    ]
+
+
 # TARGET-ish calendar for ECB FX (not perfect, but removes obvious false flags)
 class TARGETLikeCalendar(AbstractHolidayCalendar):
     rules = [
@@ -55,10 +72,15 @@ def expected_dates(asset_class: str, start: date, end: date) -> set[date]:
         cbd = CustomBusinessDay(holidays=hol)
         return set(pd.date_range(start_ts, end_ts, freq=cbd).date)
 
+    if asset_class == "rates":
+        hol = USTreasuryHolidayCalendar().holidays(start_ts, end_ts)
+        cbd = CustomBusinessDay(holidays=hol)
+        return set(pd.date_range(start_ts, end_ts, freq=cbd).date)
+
     if asset_class == "fx":
         hol = TARGETLikeCalendar().holidays(start_ts, end_ts)
         cbd = CustomBusinessDay(holidays=hol)
         return set(pd.date_range(start_ts, end_ts, freq=cbd).date)
 
-    # rates / commodities fallback: weekdays (avoid overengineering for demo)
+    # commodities fallback: weekdays (avoid overengineering for demo)
     return set(pd.bdate_range(start_ts, end_ts).date)
