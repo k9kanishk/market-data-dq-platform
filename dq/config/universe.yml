@@ -1,0 +1,73 @@
+risk_factors:
+  - id: US10Y
+    asset_class: rates
+    description: "US 10Y Treasury yield"
+    unit: "pct"
+    sources:
+      - name: fred
+        symbol: DGS10
+        field: value
+      - name: stooq
+        symbol: 10yusy.b
+        field: close
+
+  - id: US2Y
+    asset_class: rates
+    description: "US 2Y Treasury yield"
+    unit: "pct"
+    sources:
+      - name: fred
+        symbol: DGS2
+        field: value
+      - name: stooq
+        symbol: 2yusy.b
+        field: close
+
+  - id: EURUSD
+    asset_class: fx
+    description: "EUR/USD spot"
+    unit: "px"
+    sources:
+      - name: ecb_fx
+        symbol: USD
+        field: value
+      - name: yfinance
+        symbol: EURUSD=X
+        field: adj_close
+
+  - id: EURGBP
+    asset_class: fx
+    description: "EUR/GBP spot"
+    unit: "px"
+    sources:
+      - name: ecb_fx
+        symbol: GBP
+        field: value
+      - name: yfinance
+        symbol: EURGBP=X
+        field: adj_close
+
+  - id: USDGBP
+    asset_class: fx
+    description: "USD/GBP spot (derived from EURUSD/EURGBP for ECB source)"
+    unit: "px"
+    sources:
+      - name: ecb_fx_cross
+        symbol: USDGBP
+        field: value
+        legs: [EURUSD, EURGBP]
+      - name: yfinance
+        symbol: USDGBP=X
+        field: adj_close
+
+  - id: SPY
+    asset_class: equities
+    description: "SPDR S&P 500 ETF"
+    unit: "px"
+    sources:
+      - name: yfinance
+        symbol: SPY
+        field: adj_close
+      - name: stooq
+        symbol: spy.us
+        field: close
