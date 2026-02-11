@@ -1,18 +1,43 @@
 from __future__ import annotations
+
 from datetime import date
+from io import StringIO
+
 import pandas as pd
-from pandas_datareader.data import DataReader
+import requests
+
 from .base import Provider, SeriesData, ProviderError
+
+# Keyless CSV endpoint
+# Example: https://fred.stlouisfed.org/graph/fredgraph.csv?id=DGS10
+FRED_CSV = "https://fred.stlouisfed.org/graph/fredgraph.csv"
+
 
 class FREDProvider(Provider):
     name = "fred"
+
     def fetch(self, symbol: str, start: date, end: date, **kwargs) -> SeriesData:
         try:
-            df = DataReader(symbol, "fred", start, end)
+            r = requests.get(FRED_CSV, params={"id": symbol}, timeout=30)
+            r.raise_for_status()
         except Exception as e:
-            raise ProviderError(f"FRED fetch failed for {symbol}: {e}") from e
-        if df.empty:
-            raise ProviderError(f"FRED returned empty for {symbol}")
-        out = df.rename(columns={symbol: "value"}).dropna()
-        out.index = pd.to_datetime(out.index).date
-        return SeriesData(df=out[["value"]], provider=self.name, symbol=symbol)
+            raise ProviderError(f"FRED download failed for {symbol}: {e}") from e
+
+        try:
+            df = pd.read_csv(StringIO(r.text))
+        except Exception as e:
+            raise ProviderError(f"FRED CSV parse failed for {symbol}: {e}") from e
+
+        if df.empty or "DATE" not in df.columns or symbol not in df.columns:
+            raise ProviderError(f"FRED returned unexpected CSV for {symbol}: cols={list(df.columns)}")
+
+        df["DATE"] = pd.to_datetime(df["DATE"]).dt.date
+        # FRED uses '.' for missing
+        s = pd.to_numeric(df[symbol].replace(".", pd.NA), errors="coerce")
+        out = pd.DataFrame({"value": s.values}, index=df["DATE"]).dropna()
+
+        out = out.loc[(out.index >= start) & (out.index <= end)]
+        if out.empty:
+            raise ProviderError(f"FRED empty after filtering for {symbol}")
+
+        return SeriesData(df=out, provider=self.name, symbol=symbol)
