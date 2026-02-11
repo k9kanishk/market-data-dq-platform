@@ -8,4 +8,5 @@ def init_db():
     SQLModel.metadata.create_all(get_engine())
 
 def session():
-    return Session(get_engine())
+    # critical for Streamlit + short-lived sessions
+    return Session(get_engine(), expire_on_commit=False)
