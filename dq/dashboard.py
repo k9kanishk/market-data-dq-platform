@@ -58,7 +58,7 @@ def _plot(series_dict: dict[str, pd.Series], ex: pd.DataFrame):
         ex_dates = ex["obs_date"].tolist()
         ex_y = [first.get(d, None) for d in ex_dates]
         fig.add_trace(go.Scatter(x=ex_dates, y=ex_y, mode="markers", name="exceptions"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
 
 def main():
@@ -130,7 +130,7 @@ def main():
         view = df.sort_values(["severity", "obs_date"], ascending=[False, True])[
             ["id", "obs_date", "risk_factor_id", "rule", "severity", "status", "suggested_action"]
         ]
-        st.dataframe(view, use_container_width=True, hide_index=True)
+        st.dataframe(view, width="stretch", hide_index=True)
         ex_id = st.selectbox("Drilldown exception id", view["id"].tolist())
 
     with right:

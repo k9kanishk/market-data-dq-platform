@@ -8,6 +8,7 @@ from .rules.spikes import HampelRule
 from .rules.gaps import MissingBdaysRule, StaleRule
 from .rules.reconcile import ReconcileRule
 from .rules.relations import CorrBreakRule, FXTriangleRule
+from .calendars import expected_dates
 
 SPIKE = HampelRule()
 MISSING = MissingBdaysRule()
@@ -31,8 +32,6 @@ def load_series(rf_id: str) -> dict[str, pd.Series]:
         out[str(src)] = ser
     return out
 
-def expected_bdays(start: date, end: date) -> set[date]:
-    return set(pd.bdate_range(start, end).date)
 
 def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int = 400) -> int:
     # Create run + capture run_id immediately (no detached ORM objects)
@@ -57,7 +56,7 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
         raise ValueError(f"No observations for {risk_factor_id}")
 
     start = (pd.Timestamp(asof) - pd.Timedelta(days=lookback_days)).date()
-    expected = expected_bdays(start, asof)
+    expected = expected_dates(asset_class, start, asof)
 
     primary_src = sorted(series_by_src.keys())[0]
     primary = series_by_src[primary_src].loc[
