@@ -9,6 +9,7 @@ from sqlmodel import select
 from .db import session, init_db
 from .models import DQException, ExceptionAction, Observation, DataSource, RiskFactor
 from .bootstrap import ingest_universe, run_dq_for_all
+from .dq_pack import generate_dq_pack
 
 
 def _load_exceptions(from_date: date, to_date: date, rf: str, status: str) -> pd.DataFrame:
@@ -101,6 +102,37 @@ def main():
                     status.update(label="DQ runs complete", state="complete")
                 st.success(f"Completed DQ runs: {len(run_ids)}")
                 st.rerun()
+
+        st.markdown("---")
+        st.subheader("3) DQ Pack (HTML / PDF)")
+
+        pack_status = st.selectbox("Pack status", ["open", "triaged", "closed", "all"], index=0)
+
+        if st.button("Generate DQ Pack"):
+            with st.status("Generating DQ Pack...", expanded=True) as status:
+                pack = generate_dq_pack(asof=asof, lookback_days=int(dq_lookback_days), status=pack_status)
+                st.session_state["dq_pack_html"] = pack.html_bytes
+                st.session_state["dq_pack_pdf"] = pack.pdf_bytes
+                st.session_state["dq_pack_html_name"] = pack.html_name
+                st.session_state["dq_pack_pdf_name"] = pack.pdf_name
+                status.update(label="DQ Pack ready", state="complete")
+
+        if st.session_state.get("dq_pack_pdf"):
+            cA, cB = st.columns(2)
+            with cA:
+                st.download_button(
+                    "Download PDF",
+                    data=st.session_state["dq_pack_pdf"],
+                    file_name=st.session_state.get("dq_pack_pdf_name", "dq_pack.pdf"),
+                    mime="application/pdf",
+                )
+            with cB:
+                st.download_button(
+                    "Download HTML",
+                    data=st.session_state["dq_pack_html"],
+                    file_name=st.session_state.get("dq_pack_html_name", "dq_pack.html"),
+                    mime="text/html",
+                )
 
         st.caption("Note: Streamlit Cloud containers are ephemeral; data may reset on redeploy.")
 
