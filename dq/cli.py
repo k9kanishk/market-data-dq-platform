@@ -10,6 +10,7 @@ from .universe import load_universe
 from .ingest import ingest_risk_factor
 from .engine import run_dq
 from .pack import make_pack
+from .cleanup import dedupe_observations
 
 app = typer.Typer(add_completion=False)
 
@@ -67,6 +68,14 @@ def pack(from_date: str = typer.Option(..., "--from"), to_date: str = typer.Opti
     rprint(f"[green]DQ Pack generated.[/green] count={out['count']}")
     rprint(out["html"])
     rprint(out["pdf"])
+
+
+@app.command("cleanup")
+def cleanup_cmd(target: str = typer.Argument(..., help="dedupe-observations")):
+    if target != "dedupe-observations":
+        raise typer.BadParameter("Only 'dedupe-observations' is supported")
+    deleted = dedupe_observations()
+    rprint(f"[green]Cleanup complete.[/green] deleted={deleted}")
 
 @app.command()
 def serve():

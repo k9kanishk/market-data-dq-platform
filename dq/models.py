@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import datetime, date
 from typing import Optional
 from sqlmodel import SQLModel, Field, Column, JSON
+from sqlalchemy import UniqueConstraint
 
 class RiskFactor(SQLModel, table=True):
     id: str = Field(primary_key=True)
@@ -17,6 +18,10 @@ class DataSource(SQLModel, table=True):
     meta: dict = Field(default_factory=dict, sa_column=Column(JSON))
 
 class Observation(SQLModel, table=True):
+    __table_args__ = (
+        UniqueConstraint("risk_factor_id", "source_id", "obs_date", name="uq_obs_rf_source_date"),
+    )
+
     id: Optional[int] = Field(default=None, primary_key=True)
     risk_factor_id: str = Field(foreign_key="riskfactor.id", index=True)
     source_id: int = Field(foreign_key="datasource.id", index=True)

@@ -2,6 +2,7 @@ from __future__ import annotations
 from datetime import date, timedelta
 from sqlmodel import select
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from .db import session
 from .models import RiskFactor, DataSource, Observation
 from .providers.registry import get_provider
@@ -86,14 +87,23 @@ def ingest_series(
             raise ValueError(f"{provider_name} did not return 'value' column")
 
         with session() as s:
+            batch = []
             for d, v in df["value"].items():
                 if d < start or d > end:
                     continue
                 if d in existing:
                     continue
-                s.add(Observation(risk_factor_id=rf_id, source_id=source_id, obs_date=d, value=float(v)))
-                inserted += 1
-            s.commit()
+                batch.append(Observation(risk_factor_id=rf_id, source_id=source_id, obs_date=d, value=float(v)))
+
+            if not batch:
+                continue
+
+            s.add_all(batch)
+            try:
+                s.commit()
+                inserted += len(batch)
+            except IntegrityError:
+                s.rollback()
 
     return inserted
 
