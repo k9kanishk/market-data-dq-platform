@@ -1,5 +1,4 @@
 from __future__ import annotations
-import numpy as np
 import pandas as pd
 from typing import List
 from .base import Rule, Issue
@@ -27,24 +26,53 @@ class CorrBreakRule(Rule):
 
 class FXTriangleRule(Rule):
     name = "relations.fx_triangle"
-    def __init__(self, rel_tol: float = 0.002):
-        self.rel_tol = rel_tol
+
+    def __init__(self, threshold_abs_pct: float = 0.0025, rule_suffix: str | None = None):
+        self.threshold_abs_pct = threshold_abs_pct
+        self.rule_suffix = rule_suffix
 
     def run(self, series: pd.Series, **kwargs) -> List[Issue]:
         ab: pd.Series = kwargs.get("ab")  # EURUSD
-        bc: pd.Series = kwargs.get("bc")  # USDGBP
+        bc: pd.Series = kwargs.get("bc")  # USDGBP (GBP per USD)
         ac: pd.Series = kwargs.get("ac")  # EURGBP
+
         if ab is None or bc is None or ac is None:
             return []
+
+        def _dedup(s: pd.Series) -> pd.Series:
+            s = s.dropna().sort_index()
+            if not s.index.is_unique:
+                s = s.groupby(level=0).last()
+            return s
+
+        ab, bc, ac = _dedup(ab), _dedup(bc), _dedup(ac)
+
         df = pd.DataFrame({"ab": ab, "bc": bc, "ac": ac}).dropna().sort_index()
         if df.empty:
             return []
+
         implied = df["ab"] * df["bc"]
-        rel_err = (df["ac"] - implied).abs() / implied.abs().replace(0.0, np.nan)
+        abs_pct = (implied / df["ac"] - 1.0).abs()
+
+        rule = self.name
+        if self.rule_suffix:
+            rule = f"{rule}.{self.rule_suffix}"
 
         out: List[Issue] = []
-        for d, e in rel_err.dropna().items():
-            if e > self.rel_tol:
-                sev = int(min(100, 60 + 200 * float(e)))
-                out.append(Issue(self.name, d, sev, "source_switch", {"rel_error": float(e), "rel_tol": self.rel_tol}))
+        bad = abs_pct[abs_pct > self.threshold_abs_pct]
+        for d, v in bad.items():
+            out.append(
+                Issue(
+                    rule,
+                    d,
+                    min(100, int(100 * min(1.0, v / self.threshold_abs_pct))),
+                    "source_switch",
+                    {
+                        "abs_pct": float(v),
+                        "threshold": float(self.threshold_abs_pct),
+                        "implied": float(implied.loc[d]),
+                        "observed": float(df["ac"].loc[d]),
+                    },
+                )
+            )
         return out
