@@ -31,9 +31,12 @@ risk_factors:
       - name: ecb_fx
         symbol: USD
         field: value
-      - name: yfinance
-        symbol: EURUSD=X
-        field: adj_close
+      - name: twelvedata
+        symbol: EUR/USD
+        field: close
+      - name: stooq
+        symbol: eurusd
+        field: close
 
   - id: EURGBP
     asset_class: fx
@@ -43,9 +46,12 @@ risk_factors:
       - name: ecb_fx
         symbol: GBP
         field: value
-      - name: yfinance
-        symbol: EURGBP=X
-        field: adj_close
+      - name: twelvedata
+        symbol: EUR/GBP
+        field: close
+      - name: stooq
+        symbol: eurgbp
+        field: close
 
   - id: USDGBP
     asset_class: fx
@@ -55,19 +61,23 @@ risk_factors:
       - name: ecb_fx_cross
         symbol: USDGBP
         field: value
-        legs: [EURUSD, EURGBP]
-      - name: yfinance
-        symbol: USDGBP=X
-        field: adj_close
+        meta:
+          legs: [EURUSD, EURGBP]
+      - name: twelvedata
+        symbol: USD/GBP
+        field: close
+      - name: stooq
+        symbol: usdgbp
+        field: close
 
   - id: SPY
     asset_class: equities
     description: "SPDR S&P 500 ETF"
     unit: "px"
     sources:
-      - name: yfinance
+      - name: twelvedata
         symbol: SPY
-        field: adj_close
+        field: close
       - name: stooq
         symbol: spy.us
         field: close

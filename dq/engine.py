@@ -15,6 +15,39 @@ MISSING = MissingBdaysRule()
 STALE = StaleRule()
 RECON = ReconcileRule()
 
+
+def _pick_sources(asset_class: str, series_by_src: dict[str, pd.Series]) -> tuple[str, str | None]:
+    prefs_primary = {
+        "rates": ["fred", "stooq"],
+        "fx": ["ecb_fx", "twelvedata", "stooq"],
+        "equities": ["twelvedata", "stooq", "yfinance"],
+        "commodities": ["twelvedata", "stooq", "yfinance"],
+    }
+    prefs_secondary = {
+        "rates": ["stooq", "twelvedata"],
+        "fx": ["twelvedata", "stooq"],
+        "equities": ["stooq", "twelvedata"],
+        "commodities": ["stooq", "twelvedata"],
+    }
+
+    keys = list(series_by_src.keys())
+
+    primary = None
+    for preferred in prefs_primary.get(asset_class, []):
+        if preferred in series_by_src:
+            primary = preferred
+            break
+    if primary is None:
+        primary = sorted(keys)[0]
+
+    secondary = None
+    for preferred in prefs_secondary.get(asset_class, []):
+        if preferred in series_by_src and preferred != primary:
+            secondary = preferred
+            break
+
+    return primary, secondary
+
 def load_series(rf_id: str) -> dict[str, pd.Series]:
     from .models import Observation, DataSource
     with session() as s:
@@ -58,7 +91,7 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
     start = (pd.Timestamp(asof) - pd.Timedelta(days=lookback_days)).date()
     expected = expected_dates(asset_class, start, asof)
 
-    primary_src = sorted(series_by_src.keys())[0]
+    primary_src, other_src = _pick_sources(asset_class, series_by_src)
     primary = series_by_src[primary_src].loc[
         (series_by_src[primary_src].index >= start) & (series_by_src[primary_src].index <= asof)
     ]
@@ -68,8 +101,7 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
     issues += MISSING.run(primary, expected_dates=expected)
     issues += STALE.run(primary)
 
-    if len(series_by_src) >= 2:
-        other_src = sorted(series_by_src.keys())[1]
+    if other_src is not None:
         other = series_by_src[other_src].loc[
             (series_by_src[other_src].index >= start) & (series_by_src[other_src].index <= asof)
         ]
