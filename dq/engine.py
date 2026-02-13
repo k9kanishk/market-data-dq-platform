@@ -19,13 +19,13 @@ RECON = ReconcileRule()
 def _pick_sources(asset_class: str, series_by_src: dict[str, pd.Series]) -> tuple[str, str | None]:
     prefs_primary = {
         "rates": ["fred", "stooq"],
-        "fx": ["ecb_fx", "twelvedata", "stooq"],
+        "fx": ["twelvedata", "stooq", "ecb_fx"],
         "equities": ["twelvedata", "stooq", "yfinance"],
         "commodities": ["twelvedata", "stooq", "yfinance"],
     }
     prefs_secondary = {
         "rates": ["stooq", "twelvedata"],
-        "fx": ["twelvedata", "stooq"],
+        "fx": ["stooq", "twelvedata", "ecb_fx"],
         "equities": ["stooq", "twelvedata"],
         "commodities": ["stooq", "twelvedata"],
     }
@@ -61,7 +61,9 @@ def load_series(rf_id: str) -> dict[str, pd.Series]:
     if df.empty:
         return out
     for src, g in df.groupby("source"):
-        ser = pd.Series(g["value"].values, index=pd.to_datetime(g["date"]).dt.date, name=rf_id).sort_index()
+        tmp = pd.DataFrame({"date": pd.to_datetime(g["date"]).dt.date, "value": g["value"].values})
+        tmp = tmp.sort_values("date").drop_duplicates("date", keep="last")
+        ser = pd.Series(tmp["value"].values, index=tmp["date"].values, name=rf_id).sort_index()
         out[str(src)] = ser
     return out
 
@@ -117,13 +119,33 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
         eurusd = load_series("EURUSD")
         usdgbp = load_series("USDGBP")
         eurgbp = load_series("EURGBP")
-        if eurusd and usdgbp and eurgbp:
-            issues += FXTriangleRule().run(
-                primary,
-                ab=eurusd[sorted(eurusd.keys())[0]],
-                bc=usdgbp[sorted(usdgbp.keys())[0]],
-                ac=eurgbp[sorted(eurgbp.keys())[0]],
-            )
+        buckets = [
+            ("twelvedata", "twelvedata", "twelvedata"),
+            ("stooq", "stooq", "stooq"),
+            ("ecb", "ecb_fx", "ecb_fx_cross", "ecb_fx"),
+        ]
+
+        for b in buckets:
+            if b[0] in ("twelvedata", "stooq"):
+                label, src = b[0], b[1]
+                if (src in eurusd) and (src in usdgbp) and (src in eurgbp):
+                    issues += FXTriangleRule(rule_suffix=label).run(
+                        primary,
+                        ab=eurusd[src],
+                        bc=usdgbp[src],
+                        ac=eurgbp[src],
+                    )
+                    break
+            else:
+                label, ab_src, bc_src, ac_src = b
+                if (ab_src in eurusd) and (bc_src in usdgbp) and (ac_src in eurgbp):
+                    issues += FXTriangleRule(rule_suffix=label).run(
+                        primary,
+                        ab=eurusd[ab_src],
+                        bc=usdgbp[bc_src],
+                        ac=eurgbp[ac_src],
+                    )
+                    break
 
     # Persist exceptions + mark run finished using run_id (not run object)
     with session() as s:
