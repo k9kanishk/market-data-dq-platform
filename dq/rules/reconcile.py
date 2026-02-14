@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
+import numpy as np
 from typing import List, Optional
 from .base import Rule, Issue
 
@@ -44,7 +45,7 @@ class ReconcileRule(Rule):
     def _returns(self, s: pd.Series) -> pd.Series:
         s = self._dedup(s)
         if self.use_log_returns and (s > 0).all():
-            return pd.Series(pd.np.log(s.astype(float))).diff()  # log return
+            return pd.Series(np.log(s.astype(float)), index=s.index).diff()
         return s.astype(float).pct_change()  # fallback
 
     def run(self, series: pd.Series, **kwargs) -> List[Issue]:
