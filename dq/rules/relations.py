@@ -27,8 +27,14 @@ class CorrBreakRule(Rule):
 class FXTriangleRule(Rule):
     name = "relations.fx_triangle"
 
-    def __init__(self, threshold_abs_pct: float = 0.0025, rule_suffix: str | None = None):
+    def __init__(
+        self,
+        threshold_abs_pct: float = 0.005,
+        consecutive: int = 3,
+        rule_suffix: str | None = None,
+    ):
         self.threshold_abs_pct = threshold_abs_pct
+        self.consecutive = max(1, int(consecutive))
         self.rule_suffix = rule_suffix
 
     def run(self, series: pd.Series, **kwargs) -> List[Issue]:
@@ -59,7 +65,12 @@ class FXTriangleRule(Rule):
             rule = f"{rule}.{self.rule_suffix}"
 
         out: List[Issue] = []
-        bad = abs_pct[abs_pct > self.threshold_abs_pct]
+        breach = abs_pct > self.threshold_abs_pct
+        streak = breach.copy()
+        for _ in range(self.consecutive - 1):
+            streak = streak & streak.shift(1).fillna(False)
+
+        bad = abs_pct[streak]
         for d, v in bad.items():
             out.append(
                 Issue(
@@ -70,6 +81,7 @@ class FXTriangleRule(Rule):
                     {
                         "abs_pct": float(v),
                         "threshold": float(self.threshold_abs_pct),
+                        "consecutive": self.consecutive,
                         "implied": float(implied.loc[d]),
                         "observed": float(df["ac"].loc[d]),
                     },

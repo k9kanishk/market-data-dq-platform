@@ -107,7 +107,13 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
         other = series_by_src[other_src].loc[
             (series_by_src[other_src].index >= start) & (series_by_src[other_src].index <= asof)
         ]
-        issues += RECON.run(primary, other_series=other, asset_class=asset_class)
+        issues += RECON.run(
+            primary,
+            other_series=other,
+            asset_class=asset_class,
+            source_a=primary_src,
+            source_b=other_src,
+        )
 
     if asset_class == "rates" and risk_factor_id == "US10Y":
         peers = load_series("US2Y")
