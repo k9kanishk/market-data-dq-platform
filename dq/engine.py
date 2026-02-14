@@ -107,7 +107,7 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
         other = series_by_src[other_src].loc[
             (series_by_src[other_src].index >= start) & (series_by_src[other_src].index <= asof)
         ]
-        issues += RECON.run(primary, other_series=other)
+        issues += RECON.run(primary, other_series=other, asset_class=asset_class)
 
     if asset_class == "rates" and risk_factor_id == "US10Y":
         peers = load_series("US2Y")
@@ -115,7 +115,8 @@ def run_dq(asset_class: str, risk_factor_id: str, asof: date, lookback_days: int
             s2 = peers[sorted(peers.keys())[0]]
             issues += CorrBreakRule().run(primary, peer_series=s2)
 
-    if asset_class == "fx":
+    # Only run triangle once per day (anchor on EURUSD run)
+    if asset_class == "fx" and risk_factor_id == "EURUSD":
         eurusd = load_series("EURUSD")
         usdgbp = load_series("USDGBP")
         eurgbp = load_series("EURGBP")
