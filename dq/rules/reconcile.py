@@ -22,9 +22,9 @@ class ReconcileRule(Rule):
         abs_tol: float = 0.0005,
         pct_tol: float = 0.002,
         # Returns threshold (used for fx/equities/commodities by default)
-        ret_tol: float = 0.0015,  # 15 bps return-diff
-        # Persistence filter: require N consecutive breaches (2 is a good default)
-        consecutive: int = 2,
+        ret_tol: float = 0.003,  # 30 bps return-diff
+        # Persistence filter: require N consecutive breaches
+        consecutive: int = 3,
         # Prefer log-returns when series is strictly positive
         use_log_returns: bool = True,
     ):
@@ -52,6 +52,19 @@ class ReconcileRule(Rule):
         other: Optional[pd.Series] = kwargs.get("other_series")
         asset_class: str = str(kwargs.get("asset_class") or "").lower()
         mode: str = str(kwargs.get("mode") or "").lower().strip()
+        src_a = kwargs.get("source_a")
+        src_b = kwargs.get("source_b")
+
+        # Calibrate by asset class
+        if asset_class == "fx":
+            ret_tol = 0.004
+            consecutive = 3
+        elif asset_class == "equities":
+            ret_tol = 0.006
+            consecutive = 2
+        else:
+            ret_tol = self.ret_tol
+            consecutive = self.consecutive
 
         if other is None:
             return []
@@ -81,11 +94,11 @@ class ReconcileRule(Rule):
             if rdiff.empty:
                 return []
 
-            breach = rdiff > self.ret_tol
-            if self.consecutive > 1:
+            breach = rdiff > ret_tol
+            if consecutive > 1:
                 # require N consecutive True; flag the last day of the streak
                 streak = breach.copy()
-                for _ in range(self.consecutive - 1):
+                for _ in range(consecutive - 1):
                     streak = streak & streak.shift(1).fillna(False)
                 breach = streak
 
@@ -93,7 +106,7 @@ class ReconcileRule(Rule):
 
             for d in breach[breach].index:
                 dv = float(rdiff.loc[d])
-                sev = int(min(100, 70 + 30 * min(1.0, dv / (5 * self.ret_tol))))
+                sev = int(min(100, 70 + 30 * min(1.0, dv / (5 * ret_tol))))
                 out.append(
                     Issue(
                         rule_name,
@@ -103,10 +116,12 @@ class ReconcileRule(Rule):
                         {
                             "mode": "returns",
                             "ret_diff": dv,
-                            "ret_tol": float(self.ret_tol),
+                            "ret_tol": float(ret_tol),
                             "a_ret": float(ra.loc[d]) if d in ra.index and pd.notna(ra.loc[d]) else None,
                             "b_ret": float(rb.loc[d]) if d in rb.index and pd.notna(rb.loc[d]) else None,
-                            "consecutive": self.consecutive,
+                            "consecutive": consecutive,
+                            "source_a": src_a,
+                            "source_b": src_b,
                         },
                     )
                 )
