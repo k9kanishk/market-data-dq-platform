@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Any
 
 import pandas as pd
+import streamlit as st
 from sqlmodel import select
 
 from .db import init_db, session
 from .ingest import ingest_risk_factor
 from .models import RiskFactor
 from .universe import load_universe
-from .engine import run_dq
+from .engine import load_series, run_dq
 
 
 UNIVERSE_PATH = Path("dq/config/universe.yml")
@@ -35,6 +36,31 @@ def run_dq_for_all(asof: date, lookback_days: int = 400) -> list[int]:
     init_db()
     rfs = list_risk_factors()
     run_ids: list[int] = []
+    skipped: list[str] = []
+
     for rf in rfs:
-        run_ids.append(run_dq(asset_class=rf.asset_class, risk_factor_id=rf.id, asof=asof, lookback_days=lookback_days))
+        series_by_src = load_series(rf.id)
+        if not series_by_src:
+            skipped.append(rf.id)
+            continue
+
+        try:
+            run_ids.append(
+                run_dq(
+                    asset_class=rf.asset_class,
+                    risk_factor_id=rf.id,
+                    asof=asof,
+                    lookback_days=lookback_days,
+                )
+            )
+        except Exception as e:
+            skipped.append(f"{rf.id} (error: {e})")
+            continue
+
+    if skipped:
+        try:
+            st.warning("Skipped risk factors with no data: " + ", ".join(skipped))
+        except Exception:
+            pass
+
     return run_ids

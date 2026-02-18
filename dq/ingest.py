@@ -113,7 +113,7 @@ def ingest_risk_factor(rf: RiskFactorSpec, start: date, end: date) -> dict:
     for src in rf.sources:
         meta = src.meta or {}
         try:
-            inserted = ingest_series(rf.id, src.name, src.symbol, start, end, src.field, meta)
+            inserted = ingest_series(rf.id, src.name, src.symbol, start, end, field=src.field, meta=meta)
             results.append({"source": src.name, "symbol": src.symbol, "inserted": inserted, "error": ""})
         except Exception as e:
             # critical for DQ platforms: never die because one feed is broken
