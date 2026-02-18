@@ -72,15 +72,18 @@ class FXTriangleRule(Rule):
 
         bad = abs_pct[streak]
         for d, v in bad.items():
+            ratio = float(v / self.threshold_abs_pct)
+            sev = int(min(100, 60 + 40 * min(1.0, (ratio - 1.0) / 4.0)))  # 60 @ 1x, 100 @ 5x
             out.append(
                 Issue(
                     rule,
                     d,
-                    min(100, int(100 * min(1.0, v / self.threshold_abs_pct))),
+                    sev,
                     "source_switch",
                     {
                         "abs_pct": float(v),
                         "threshold": float(self.threshold_abs_pct),
+                        "ratio": ratio,
                         "consecutive": self.consecutive,
                         "implied": float(implied.loc[d]),
                         "observed": float(df["ac"].loc[d]),
