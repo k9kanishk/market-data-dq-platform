@@ -1,29 +1,30 @@
-# Market Data DQ Platform (VaR Risk Factors)
+# Market Data DQ Platform for VaR Risk Factors
 
-A practical market data DQ platform that:
-- Ingests time-series risk factors from **multiple public sources**
-- Runs layered controls: spikes, gaps/staleness, relationship checks, and source reconciliation
-- Stores an **audit trail** in SQL (runs, exceptions, analyst actions)
-- Provides a **Streamlit triage dashboard**
-- Generates a weekly **DQ Pack** (HTML + PDF)
+A Python + SQL market data quality platform that ingests real historical time series from multiple sources,
+runs layered DQ controls (spikes, gaps/staleness, cross-checks, vendor reconciliation), supports triage/audit trail,
+and generates a weekly DQ Pack (HTML/PDF).
 
-## Quickstart
+## Why this matters
+VaR and stress testing depend on clean market risk factor time series. This tool flags spikes/gaps, stale prints,
+and vendor disagreements, producing an exception queue + working-group-ready reporting.
 
+## Architecture
+- Ingestion: multi-provider (ECB/FRED/Stooq/TwelveData optional)
+- Storage: SQLModel + SQLite (swap to Postgres easily)
+- DQ Engine: rules for spikes/gaps/reconcile/relations
+- Workflow: exception queue + actions (audit trail)
+- Reporting: one-click DQ Pack (PDF/HTML)
+- Automation: weekly GitHub Action creates artifacts
+
+## Data sources
+- ECB FX (no key)
+- FRED rates (no key)
+- Stooq (no key)
+- TwelveData (optional key) — set `TWELVEDATA_API_KEY`
+
+## Quickstart (local)
 ```bash
-python -m venv .venv
-# Windows: .\.venv\Scripts\activate
-source .venv/bin/activate
-
-pip install -U pip
-pip install -e .
-
-dq db init
-dq ingest universe --start 2018-01-01 --end 2026-02-10
-dq run --asset-class rates --risk-factor US10Y --asof 2026-01-20
-dq serve
-```
-
-Notes
-
-Public data feeds are imperfect by nature (format changes, throttling). That’s fine: the value here is
-the control framework + auditability. Swap providers later for Bloomberg/Refinitiv/internal sources.
+poetry install
+poetry run dq db init
+poetry run dq ingest universe --start 2023-01-01 --end 2026-02-18
+poetry run streamlit run streamlit_app.py
